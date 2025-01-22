@@ -1,0 +1,10 @@
+### OSX ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# misc
+*.pem
+
+# env files (can opt-in for committing if needed)
+.env*
