@@ -1,6 +1,17 @@
+from django.conf import settings
 from django.db import models
+from django.db.models.signals import post_save
 from django.utils import timezone
+from django.dispatch import receiver
+from rest_framework.authtoken.models import Token
 
+
+# automatically generates Token for every user
+# by catching the User's post_save signal.
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_auth_token(sender, instance=None, created=False, **kwargs):
+    if created:
+        Token.objects.create(user=instance)
 
 class Transaction(models.Model):
     DATE_FMT = '%m-%d-%Y %I:%M %p'
@@ -18,6 +29,3 @@ class Transaction(models.Model):
     def __str__(self):
         datestr = timezone.localtime(self.date).strftime(self.DATE_FMT)
         return f"{datestr} - {self.customer} @ {self.vendor} - ${self.purchase_total:,.2f}"
-    
-    #def was_published_recently(self):
-    #    return self.pub_date >= timezone.now() - datetime.timedelta(days=1)
