@@ -1,5 +1,5 @@
 """
-URL configuration for pcm_match project.
+URL configuration for benefitsmatch project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.1/topics/http/urls/
@@ -16,8 +16,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include,path
+from rest_framework.routers import DefaultRouter
+from rest_framework.authtoken import views
+
+from transactionlog.views import TransactionViewSet
+
+router = DefaultRouter()
+router.register(r'transactions', TransactionViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('transactions/', include('transactionlog.urls'))
+    path('api-token/', views.obtain_auth_token), # can subclass ObtainAuthToken for custom behavior
+    path('api/', include((router.urls, 'transactions'), namespace='transactions')),
 ]
