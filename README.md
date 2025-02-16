@@ -1,5 +1,6 @@
 # pcm-benefits-match
-Webapp for managing the Petworth Community Market benefits matching program
+Web application to manage transactions for the Petworth Community Market benefits matching program.
+
 
 ### Getting Started
 
@@ -21,4 +22,3 @@ Webapp for managing the Petworth Community Market benefits matching program
     ```bash
     docker compose up --build
     ```
-
