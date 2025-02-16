@@ -30,7 +30,7 @@ class TransactionTests(APITestCase):
 
     def test_create_transaction(self):
         """
-        Ensure we can create a new book.
+        Ensure we can create a new transaction.
         """
         data = {'date': '2025-02-15', 'vendor': 'Test Vendor', 'customer': 'Test Customer',
                 'purchase_total': 10, 'snap':5, 'wicsenior':0, 'match_snap':5, 'match_wicsenior':0, 'cash_credit':0}
@@ -39,7 +39,7 @@ class TransactionTests(APITestCase):
 
     def test_get_transaction(self):
         """
-        Ensure we can get books.
+        Ensure we can get transactions.
         """
         response = self.user_client.get('/api/transactions/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
