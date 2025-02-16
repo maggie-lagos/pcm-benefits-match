@@ -27,6 +27,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Run Tests
-      working-directory: ./backend
+      working-directory: ./backend/benefitsmatch
       run: |
         python manage.py test
