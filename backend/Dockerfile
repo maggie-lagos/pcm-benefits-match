@@ -36,6 +36,10 @@ WORKDIR /app
  
 # Copy application code
 COPY --chown=appuser:appuser benefitsmatch/. .
+COPY --chown=appuser:appuser docker-entrypoint.sh .
+# TODO: secure this directory
+RUN mkdir /app/static && chmod 777 /app/static
+RUN chmod +x docker-entrypoint.sh
 
 # Set environment variables to optimize Python
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -47,7 +51,5 @@ USER appuser
 # Expose the Django port
 EXPOSE 8000
  
-# Run Django’s development server
-# TODO: python manage.py migrate
-# TODO: python manage.py collectstatic --noinput
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "benefitsmatch.wsgi:application"]
+# Run admin steps and start
+ENTRYPOINT [ "/app/docker-entrypoint.sh" ]

@@ -32,5 +32,17 @@ services:
      DATABASE_PORT: ${DATABASE_PORT}
    env_file:
      - .env
+   volumes:
+    - static_files:/app/static
+ nginx:
+   build: backend/nginx
+   volumes:
+    - static_files:/static
+   ports:
+    - "80:80"
+   depends_on:
+    - django-web
 volumes:
    postgres_data:
+   static_files:
+   
