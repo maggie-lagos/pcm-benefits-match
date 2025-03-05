@@ -22,3 +22,9 @@ Web application to manage transactions for the Petworth Community Market benefit
     ```bash
     docker compose up --build
     ```
+
+1. Navigate your browser to:
+```
+localhost:80
+```
+

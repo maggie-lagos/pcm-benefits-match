@@ -15,3 +15,4 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
+*terraform*
