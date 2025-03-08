@@ -139,9 +139,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-USE_S3 = os.getenv('USE_S3') == 'TRUE'
+STATIC_FILES_USE_S3 = os.getenv('USE_S3') == 'TRUE'
 
-if USE_S3:
+if STATIC_FILES_USE_S3:
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME')

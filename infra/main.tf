@@ -368,8 +368,10 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DATABASE_PASSWORD", value = var.database_password },
         { name = "DATABASE_HOST", value = aws_db_instance.postgres.address },
         { name = "DATABASE_PORT", value = tostring(aws_db_instance.postgres.port) },
+        { name = "STATIC_FILES_USE_S3", value = "TRUE" },
         { name = "AWS_STORAGE_BUCKET_NAME", value = aws_s3_bucket.static_files.bucket },
-        { name = "AWS_S3_REGION_NAME", value = var.aws_region }
+        { name = "AWS_S3_REGION_NAME", value = var.aws_region },
+        { name = "AWS_CLOUDFRONT_DOMAIN", value = aws_cloudfront_distribution.main.domain_name }
       ]
       
       logConfiguration = {
