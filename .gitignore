@@ -8,3 +8,11 @@
 
 # env files (can opt-in for committing if needed)
 .env*
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*terraform*
