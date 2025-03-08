@@ -28,3 +28,19 @@ Web application to manage transactions for the Petworth Community Market benefit
 localhost:80
 ```
 
+### AWS Deployment
+
+```
+# Get the ECR repository URL from the output
+export ECR_REPO=$(terraform output -raw ecr_repository_url)
+
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPO
+
+# Build your Docker image
+cd backend
+docker build -t $ECR_REPO:latest .
+
+# Push the image to ECR
+docker push $ECR_REPO:latest
+```
