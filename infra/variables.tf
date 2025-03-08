@@ -9,7 +9,7 @@ variable "aws_region" {
 variable "app_name" {
   description = "Name of the application"
   type        = string
-  default     = "django-app"
+  default     = "pcm-match"
 }
 
 variable "environment" {
@@ -105,6 +105,24 @@ variable "app_count" {
   description = "Number of Docker containers to run"
   type        = number
   default     = 2
+}
+
+variable "app_min_count" {
+  description = "Minimum number of Docker containers"
+  type        = number
+  default     = 2
+}
+
+variable "app_max_count" {
+  description = "Maximum number of Docker containers"
+  type        = number
+  default     = 10
+}
+
+variable "use_fargate_spot" {
+  description = "Use Fargate Spot capacity provider"
+  type        = bool
+  default     = false
 }
 
 variable "tags" {

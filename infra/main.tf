@@ -4,6 +4,7 @@
 resource "aws_ecr_repository" "app" {
   name                 = "${var.app_name}-app"
   image_tag_mutability = "MUTABLE"
+  force_delete         = var.environment != "production"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -14,7 +15,7 @@ resource "aws_ecr_repository" "app" {
 
 # VPC Configuration
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
+  source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
   name = "${var.app_name}-vpc"
@@ -121,7 +122,7 @@ resource "aws_db_instance" "postgres" {
   engine_version         = "17"
   instance_class         = var.db_instance_class
   allocated_storage      = var.db_allocated_storage
-  storage_type           = "gp2"
+  storage_type           = "gp3"
   db_name                = var.database_name
   username               = var.database_username
   password               = var.database_password
@@ -136,13 +137,18 @@ resource "aws_db_instance" "postgres" {
 
 # S3 Bucket for Static Files
 resource "aws_s3_bucket" "static_files" {
-  bucket = "${var.app_name}-static-files-${var.environment}"
-
+  bucket = "${var.app_name}-static-files-${var.environment}-${random_id.bucket_suffix.hex}"
+  
   tags = var.tags
+}
+
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
 }
 
 resource "aws_s3_bucket_ownership_controls" "static_files" {
   bucket = aws_s3_bucket.static_files.id
+  
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
@@ -164,6 +170,14 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "static_files" {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "static_files" {
+  bucket = aws_s3_bucket.static_files.id
+  
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
@@ -221,7 +235,7 @@ resource "aws_iam_role" "ecs_task_role" {
 
 resource "aws_iam_policy" "s3_access" {
   name        = "${var.app_name}-s3-access-policy"
-  description = "Policy that allows R/W access to S3"
+  description = "Policy that allows access to S3"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -267,7 +281,7 @@ resource "aws_lb_target_group" "app" {
   protocol    = "HTTP"
   vpc_id      = module.vpc.vpc_id
   target_type = "ip"
-
+  
   health_check {
     enabled             = true
     path                = "/health/"
@@ -279,6 +293,10 @@ resource "aws_lb_target_group" "app" {
   }
 
   tags = var.tags
+  
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lb_listener" "http" {
@@ -302,6 +320,17 @@ resource "aws_ecs_cluster" "main" {
   }
 
   tags = var.tags
+}
+
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name = aws_ecs_cluster.main.name
+
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = var.use_fargate_spot ? "FARGATE_SPOT" : "FARGATE"
+    weight            = 1
+  }
 }
 
 # ECS Task Definition
@@ -339,7 +368,8 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DATABASE_PASSWORD", value = var.database_password },
         { name = "DATABASE_HOST", value = aws_db_instance.postgres.address },
         { name = "DATABASE_PORT", value = tostring(aws_db_instance.postgres.port) },
-        { name = "AWS_STORAGE_BUCKET_NAME", value = aws_s3_bucket.static_files.bucket }
+        { name = "AWS_STORAGE_BUCKET_NAME", value = aws_s3_bucket.static_files.bucket },
+        { name = "AWS_S3_REGION_NAME", value = var.aws_region }
       ]
       
       logConfiguration = {
@@ -353,6 +383,11 @@ resource "aws_ecs_task_definition" "app" {
     }
   ])
 
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
+
   tags = var.tags
 }
 
@@ -363,6 +398,12 @@ resource "aws_ecs_service" "app" {
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.app_count
   launch_type     = "FARGATE"
+
+  # Alternatively, you can use capacity provider strategy instead of launch_type
+  # capacity_provider_strategy {
+  #   capacity_provider = var.use_fargate_spot ? "FARGATE_SPOT" : "FARGATE"
+  #   weight            = 1
+  # }
 
   network_configuration {
     security_groups  = [aws_security_group.ecs_tasks.id]
@@ -376,16 +417,72 @@ resource "aws_ecs_service" "app" {
     container_port   = 8000
   }
 
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   depends_on = [
     aws_lb_listener.http
   ]
 
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+}
+
+# Auto Scaling for ECS Service
+resource "aws_appautoscaling_target" "ecs_target" {
+  max_capacity       = var.app_max_count
+  min_capacity       = var.app_min_count
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs_policy_cpu" {
+  name               = "${var.app_name}-cpu-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 150
+  }
+}
+
+resource "aws_appautoscaling_policy" "ecs_policy_memory" {
+  name               = "${var.app_name}-memory-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value = 70.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 150
+  }
 }
 
 # CloudFront Distribution
-resource "aws_cloudfront_origin_access_identity" "main" {
-  comment = "${var.app_name} origin access identity"
+resource "aws_cloudfront_origin_access_control" "s3_origin" {
+  name                              = "${var.app_name}-s3-oac"
+  description                       = "S3 CloudFront Origin Access Control"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 resource "aws_s3_bucket_policy" "static_files" {
@@ -396,10 +493,15 @@ resource "aws_s3_bucket_policy" "static_files" {
       {
         Effect    = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${aws_cloudfront_origin_access_identity.main.id}"
+          Service = "cloudfront.amazonaws.com"
         }
         Action    = "s3:GetObject"
         Resource  = "${aws_s3_bucket.static_files.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
+          }
+        }
       }
     ]
   })
@@ -410,6 +512,8 @@ resource "aws_cloudfront_distribution" "main" {
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
+  http_version        = "http2and3"
+  wait_for_deployment = false
 
   origin {
     domain_name = aws_lb.main.dns_name
@@ -424,12 +528,9 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   origin {
-    domain_name = aws_s3_bucket.static_files.bucket_regional_domain_name
-    origin_id   = "S3Origin"
-
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.main.cloudfront_access_identity_path
-    }
+    domain_name              = aws_s3_bucket.static_files.bucket_regional_domain_name
+    origin_id                = "S3Origin"
+    origin_access_control_id = aws_cloudfront_origin_access_control.s3_origin.id
   }
 
   default_cache_behavior {
@@ -437,18 +538,11 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "ALBOrigin"
 
-    forwarded_values {
-      query_string = true
-      cookies {
-        forward = "all"
-      }
-      headers = ["Host", "Origin", "Authorization"]
-    }
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer
 
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
+    compress               = true
   }
 
   ordered_cache_behavior {
@@ -457,18 +551,11 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "S3Origin"
 
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
+    cache_policy_id          = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+    origin_request_policy_id = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf" # CORS-S3Origin
 
     compress               = true
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 86400
-    max_ttl                = 31536000
   }
 
   restrictions {
