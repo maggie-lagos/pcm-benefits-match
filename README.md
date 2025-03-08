@@ -10,7 +10,7 @@ Web application to manage transactions for the Petworth Community Market benefit
     DEBUG=True
     DJANGO_LOGLEVEL=info
     DJANGO_ALLOWED_HOSTS=localhost
-    DATABASE_ENGINE=postgresql_psycopg2
+    DATABASE_ENGINE=postgresql
     DATABASE_NAME=benefitsmatch
     DATABASE_USERNAME=dbuser
     DATABASE_PASSWORD=dbpassword
@@ -30,6 +30,10 @@ localhost:80
 
 ### AWS Deployment
 
+The Terraform configuration deploys a Django application on AWS ECS Fargate with PostgreSQL RDS. It includes all the necessary AWS resources including VPC, subnets, security groups, load balancer, and CloudFront distribution.
+
+Manual steps to publish new version:
+
 ```
 # Get the ECR repository URL from the output
 export ECR_REPO=$(terraform output -raw ecr_repository_url)
@@ -39,8 +43,8 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 
 # Build your Docker image
 cd backend
-docker build -t $ECR_REPO:latest .
+docker build --platform linux/amd64 -t "$ECR_REPO":latest .
 
 # Push the image to ECR
-docker push $ECR_REPO:latest
+docker push "$ECR_REPO":latest
 ```

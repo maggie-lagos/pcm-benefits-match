@@ -362,7 +362,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DEBUG", value = var.debug },
         { name = "DJANGO_LOGLEVEL", value = var.django_loglevel },
         { name = "DJANGO_ALLOWED_HOSTS", value = "${aws_lb.main.dns_name},${aws_cloudfront_distribution.main.domain_name}" },
-        { name = "DATABASE_ENGINE", value = "django.db.backends.postgresql" },
+        { name = "DATABASE_ENGINE", value = "postgresql" },
         { name = "DATABASE_NAME", value = var.database_name },
         { name = "DATABASE_USERNAME", value = var.database_username },
         { name = "DATABASE_PASSWORD", value = var.database_password },

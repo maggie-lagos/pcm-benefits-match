@@ -2,7 +2,7 @@
 
 set -e
 
-# collect static files and migrate
+# collect static files and apply db migrations
 python manage.py collectstatic --noinput
 python manage.py migrate
 

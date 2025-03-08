@@ -15,6 +15,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include,path
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken import views
@@ -24,8 +25,12 @@ from transactionlog.views import TransactionViewSet
 router = DefaultRouter()
 router.register(r'transactions', TransactionViewSet)
 
+def health_check(request):
+    return HttpResponse("OK")
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-token/', views.obtain_auth_token), # can subclass ObtainAuthToken for custom behavior
     path('api/', include((router.urls, 'transactions'), namespace='transactions')),
+    path('health/', health_check, name='health_check'),
 ]
